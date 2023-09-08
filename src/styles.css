@@ -1,1 +1,82 @@
-/* You can add global styles to this file, and also import other style files */
+body {
+  font-family: Arial, sans-serif;
+  text-align: center;
+  background-color: #ffffff;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 100vh;
+  color: #1e61f3ff;
+  font-weight: bold;
+}
+
+
+label {
+  display: block;
+  margin-top: 10px;
+}
+
+button {
+  width: 30%;
+  padding: 10px;
+  margin-top: 5px;
+  border: 1px solid #ccc;
+  border-radius: 5px;
+}
+
+.show-result {
+  display: block; /* Show the element */
+}
+
+.hide-result {
+  display: none; /* Hide the element */
+}
+
+button {
+  background-color: #1e61f3ff;
+  color: #ffffff;
+  font-weight: bold;
+  cursor: pointer;
+}
+
+button:hover {
+  background-color: #0056b3;
+}
+
+.title-container {
+  max-width: 100%; /* Scale SVG to fit its container */
+  height: auto;    /* Maintain aspect ratio */
+}
+
+#app {
+  width: auto;
+  height: auto;
+  max-width: 600px;
+  padding: 20px;
+}
+
+/* Center the input boxes */
+form {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+input[type="text"],
+input[type="number"],
+
+#result {
+  margin-top: 20px;
+  padding: 20px;
+  border: 1px solid #ccc;
+  border-radius: 5px;
+  text-align: left;
+}
+
+@media (max-width: 600px) {
+  #app {
+    margin: 10px;
+  }
+}

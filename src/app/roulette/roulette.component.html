@@ -1,0 +1,18 @@
+<div id="app">
+  <img src="assets/title.svg" alt="" class="title-container">
+  <p>Enter a radius and find a random pub!</p>
+  <form [formGroup]="pubRouletteForm" (ngSubmit)="onSubmit()" id="search-form">
+    <label for="radius">Radius (meters):</label>
+    <input type="number" id="radius" min="1" max="9999" formControlName="radius" required>
+    <br><br>
+    <button type="submit">Find a Pub</button>
+  </form>
+  <div id="result" [ngClass]="{'show-result': showResultContainer, 'hide-result': !showResultContainer}">
+    <app-loading *ngIf="loading"></app-loading>
+    <p class="error-message" *ngIf="showErrorMessage"> {{errorMessage}}</p>
+    <div [ngClass]="{'show-result': showResult, 'hide-result': !showResult}">
+      <result></result>
+    </div>
+  </div>
+</div>
+
