@@ -1,5 +1,7 @@
+@import url("../node_modules/bootstrap/dist/css/bootstrap.min.css");
+
 body {
-  font-family: Arial, sans-serif;
+  font-family: "Berlin Sans FB Demi", serif;
   text-align: center;
   background-color: #ffffff;
   margin: 0;
@@ -8,14 +10,18 @@ body {
   justify-content: center;
   align-items: center;
   min-height: 100vh;
-  color: #1e61f3ff;
+  color: #000000;
   font-weight: bold;
 }
 
+ngb-rating {
+  color: #b00000;
+  font-size: 50px;
+}
 
 label {
   display: block;
-  margin-top: 10px;
+  font-size: 20px;
 }
 
 button {
@@ -27,15 +33,15 @@ button {
 }
 
 .show-result {
-  display: block; /* Show the element */
+  display: block;
 }
 
 .hide-result {
-  display: none; /* Hide the element */
+  display: none;
 }
 
 button {
-  background-color: #1e61f3ff;
+  background-color: #d00000;
   color: #ffffff;
   font-weight: bold;
   cursor: pointer;
@@ -46,8 +52,8 @@ button:hover {
 }
 
 .title-container {
-  max-width: 100%; /* Scale SVG to fit its container */
-  height: auto;    /* Maintain aspect ratio */
+  max-width: 100%;
+  height: auto;
 }
 
 #app {
@@ -57,7 +63,16 @@ button:hover {
   padding: 20px;
 }
 
-/* Center the input boxes */
+#result-container {
+  margin: auto;
+  text-align: center;
+}
+
+.rating-result {
+  color: #d00000;
+  font-size: 45px;
+}
+
 form {
   display: flex;
   flex-direction: column;

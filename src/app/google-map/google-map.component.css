@@ -1,5 +1,4 @@
-/* google-map.component.css */
 #map {
-  height: 500px; /* Set the desired map height */
-  width: 100%; /* Set the desired map width */
+  height: 500px;
+  width: 100%;
 }

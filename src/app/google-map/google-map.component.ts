@@ -11,19 +11,15 @@ declare var google: any;
 @Injectable({
   providedIn: 'root',
 })
-export class GoogleMapComponent implements OnInit {
+export class GoogleMapComponent {
   map: any;
   directionsService: any;
   directionsRenderer: any;
 
   initMap(startLat: number, startLong: number, endLat: number, endLong: number): void {
-    console.log(startLat)
-    console.log(startLong)
-    console.log(endLat)
-    console.log(endLong)
     this.map = new google.maps.Map(document.getElementById('map'), {
-      center: { lat: startLat, lng: startLong }, // Set your initial map center
-      zoom: 10, // Set the initial zoom level
+      center: { lat: startLat, lng: startLong },
+      zoom: 10,
     });
 
     this.directionsService = new google.maps.DirectionsService();
@@ -34,13 +30,13 @@ export class GoogleMapComponent implements OnInit {
   }
 
   calculateAndDisplayRoute(startLat: number, startLong: number, endLat: number, endLong: number): void {
-    const start = new google.maps.LatLng(startLat, startLong); // Replace with your start coordinates
-    const end = new google.maps.LatLng(endLat, endLong); // Replace with your end coordinates
+    const start = new google.maps.LatLng(startLat, startLong);
+    const end = new google.maps.LatLng(endLat, endLong);
 
     const request = {
       origin: start,
       destination: end,
-      travelMode: google.maps.TravelMode.DRIVING, // Change this for different travel modes
+      travelMode: google.maps.TravelMode.WALKING,
     };
 
     this.directionsService.route(request, (result: any, status: any) => {
@@ -52,6 +48,4 @@ export class GoogleMapComponent implements OnInit {
     });
   }
 
-  ngOnInit(): void {
-  }
 }

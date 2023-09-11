@@ -1,12 +1,8 @@
 import { Component } from '@angular/core';
 import {FormControl, FormGroup} from '@angular/forms';
 import {RouletteService} from "./roulette.service";
-import { EventEmitter, Input, Output } from '@angular/core';
-import {Router} from "@angular/router";
 import {DataSharingService} from "../data-sharing.service";
-import {PubRouletteParameters} from "./roulette";
-import {PubRouletteLocation, PubRouletteResult} from "../result/result";
-import {ResultComponent} from "../result/result.component";
+import {PubRouletteResult} from "../result/result";
 
 @Component({
   selector: 'roulette',
@@ -14,20 +10,30 @@ import {ResultComponent} from "../result/result.component";
 })
 export class RouletteComponent {
 
-  location: string = "";
-  radius: string = "";
-  showResult: boolean = false;
-  showResultContainer: boolean = false;
-  showErrorMessage: boolean = false;
-  errorMessage: string = "";
-  loading: boolean = true;
+  location: string;
+  radius: string;
+  showResult: boolean;
+  showResultContainer: boolean;
+  showErrorMessage: boolean;
+  errorMessage: string;
+  loading: boolean;
+  pubRouletteForm: FormGroup;
 
-  pubRouletteForm = new FormGroup({
-    location: new FormControl(this.location),
-    radius: new FormControl(this.radius)
-  })
+  constructor(public pubRouletteService: RouletteService, public dataSharingService: DataSharingService) {
+    this.location = "";
+    this.radius = "";
+    this.showResult = false;
+    this.showResultContainer = false;
+    this.showErrorMessage = false;
+    this.loading = false;
+    this.errorMessage = "";
 
-  constructor(public pubRouletteService: RouletteService, public dataSharingService: DataSharingService) {}
+    this.pubRouletteForm = new FormGroup({
+      location: new FormControl(this.location),
+      radius: new FormControl(this.radius)
+    })
+
+  }
 
   onSubmit() {
     if (this.pubRouletteForm.valid) {

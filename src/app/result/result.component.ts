@@ -1,9 +1,7 @@
 import {ChangeDetectorRef, Component, Injectable, NgZone, OnInit} from '@angular/core';
 import {DataSharingService} from "../data-sharing.service";
-import {PubRouletteParameters} from "../roulette/roulette";
 import {PubRouletteResult} from "./result";
 import {GoogleMapComponent} from "../google-map/google-map.component";
-import {BigInteger} from "@angular/compiler/src/i18n/big_integer";
 
 @Component({
   selector: 'result',
@@ -13,11 +11,15 @@ import {BigInteger} from "@angular/compiler/src/i18n/big_integer";
   providedIn: 'root',
 })
 export class ResultComponent implements OnInit{
-  pubResult: PubRouletteResult = new PubRouletteResult('', '', '', '');
-  startLat = 0;
-  startLong = 0;
+  pubResult: PubRouletteResult;
+  startLat: number;
+  startLong: number;
 
-  constructor(private ngZone: NgZone, private cdr: ChangeDetectorRef, private dataSharingService: DataSharingService, private googleMapComponent: GoogleMapComponent) {}
+  constructor(private ngZone: NgZone, private cdr: ChangeDetectorRef, private dataSharingService: DataSharingService, private googleMapComponent: GoogleMapComponent) {
+    this.pubResult = new PubRouletteResult('', '', 0, '');
+    this.startLat = 0;
+    this.startLong = 0;
+  }
 
 
   ngOnInit() {
@@ -31,8 +33,8 @@ export class ResultComponent implements OnInit{
 
     this.dataSharingService.pubResult$.subscribe((result) => {
       this.pubResult = result;
-      const parts = this.pubResult.location.split(',');
-      this.googleMapComponent.initMap(this.startLat, this.startLong, Number(parts[1]), Number(parts[0])
+      const latLong = this.pubResult.location.split(',');
+      this.googleMapComponent.initMap(this.startLat, this.startLong, Number(latLong[1]), Number(latLong[0])
       )
     });
   }

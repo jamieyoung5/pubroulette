@@ -9,6 +9,7 @@ import {RouletteComponent} from "./roulette/roulette.component";
 import {ReactiveFormsModule} from "@angular/forms";
 import {HttpClientModule} from "@angular/common/http";
 import { LoadingComponent } from './loading/loading.component';
+import { NgbModule } from '@ng-bootstrap/ng-bootstrap';
 
 @NgModule({
   declarations: [
@@ -19,12 +20,13 @@ import { LoadingComponent } from './loading/loading.component';
     ResultComponent,
     LoadingComponent,
   ],
-  imports: [
-    BrowserModule,
-    AppRoutingModule,
-    HttpClientModule,
-    ReactiveFormsModule
-  ],
+    imports: [
+        BrowserModule,
+        AppRoutingModule,
+        HttpClientModule,
+        ReactiveFormsModule,
+        NgbModule
+    ],
   providers: [],
   bootstrap: [AppComponent]
 })
