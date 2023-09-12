@@ -1,0 +1,9 @@
+
+@font-face {
+  font-family: 'Berlin Sans FB Demi Bold';
+  src: url('./assets/fonts/Berlin Sans FB Demi Bold.ttf') format('truetype')
+}
+
+body {
+  font-family: 'Berlin Sans FB Demi Bold', sans-serif;
+}
