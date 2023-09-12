@@ -10,6 +10,7 @@ import {ReactiveFormsModule} from "@angular/forms";
 import {HttpClientModule} from "@angular/common/http";
 import { LoadingComponent } from './loading/loading.component';
 import { NgbModule } from '@ng-bootstrap/ng-bootstrap';
+import { FooterComponent } from './footer/footer.component';
 
 @NgModule({
   declarations: [
@@ -19,6 +20,7 @@ import { NgbModule } from '@ng-bootstrap/ng-bootstrap';
     RouletteComponent,
     ResultComponent,
     LoadingComponent,
+    FooterComponent,
   ],
     imports: [
         BrowserModule,
