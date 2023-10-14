@@ -62,6 +62,8 @@ button:hover {
   height: auto;
   max-width: 600px;
   padding: 20px;
+  flex-direction: column;
+  display: flex;
 }
 
 #result-container {
@@ -107,6 +109,24 @@ input[type=number] {
   border-radius: 5px;
   text-align: left;
 }
+
+
+footer {
+  color: #000000;
+  text-align: center;
+}
+
+footer a {
+  color: #b00000;
+
+}
+
+.footer-container {
+  position: absolute;
+  bottom: 0;
+  margin-left: 5svh;
+}
+
 
 @media (max-width: 600px) {
   #app {
