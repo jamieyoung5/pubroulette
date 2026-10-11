@@ -1,0 +1,92 @@
+[package]
+name = "pubroulette"
+version = "0.1.0"
+edition = "2024"
+
+[[bin]]
+name = "play"
+path = "api/play.rs"
+
+[[bin]]
+name = "crawl"
+path = "api/crawl.rs"
+
+[[bin]]
+name = "rooms"
+path = "api/rooms.rs"
+
+[[bin]]
+name = "rooms_get"
+path = "api/rooms/[code].rs"
+
+[[bin]]
+name = "rooms_join"
+path = "api/rooms/[code]/join.rs"
+
+[[bin]]
+name = "rooms_start"
+path = "api/rooms/[code]/start.rs"
+
+[[bin]]
+name = "rooms_advance"
+path = "api/rooms/[code]/advance.rs"
+
+[[bin]]
+name = "rooms_leave"
+path = "api/rooms/[code]/leave.rs"
+
+[[bin]]
+name = "rooms_vote"
+path = "api/rooms/[code]/vote.rs"
+
+[[bin]]
+name = "rooms_skip_round"
+path = "api/rooms/[code]/skip-round.rs"
+
+[[bin]]
+name = "rooms_next_round"
+path = "api/rooms/[code]/next-round.rs"
+
+[[bin]]
+name = "rooms_rejoin"
+path = "api/rooms/[code]/rejoin.rs"
+
+[[bin]]
+name = "health"
+path = "api/health.rs"
+
+[[bin]]
+name = "search"
+path = "api/search.rs"
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+tokio = { version = "1", features = ["full"] }
+reqwest = { version = "0.12.24", features = ["json"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0.145"
+rand = "0.8"
+validator = { version = "0.20", features = ["derive"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json", "fmt"] }
+http = "1.3.1"
+vercel_runtime = "1.1.6"
+uuid = { version = "1", features = ["v4"] }
+redis = { version = "0.27", features = ["tokio-comp", "aio"] }
+chrono = { version = "0.4", features = ["serde"] }
+hmac = "0.13.0"
+sha2 = "0.11.0"
+subtle = "2.6.1"
+base64 = "0.22.1"
+h3o = "0.9"
+
+[dev-dependencies]
+# axum + tower-http are only used by examples/devserver.rs (the local-Vercel
+# substitute) and tests; keeping them out of the production builds shrinks
+# every function binary.
+axum = "0.8.6"
+tower-http = { version = "0.5.2", features = ["cors"] }
+dotenvy = "0.15"
+wiremock = "0.6"
