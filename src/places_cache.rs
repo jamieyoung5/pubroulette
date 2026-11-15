@@ -13,8 +13,8 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use tracing::{info, warn};
 
-/// ~0.74 sq km per hex, so a 500 m search covers a handful and the 5 km max
-/// covers a few hundred.
+/// ~0.74 sq km per hex. After trimming, a 500 m search touches about 4 hexes
+/// and the 5 km max about 150.
 const HEX_RES: Resolution = Resolution::Eight;
 
 /// Edge length, which for a hexagon is also the centre-to-vertex distance.
@@ -22,6 +22,13 @@ const HEX_EDGE_M: f64 = HEX_RES.edge_length_m();
 
 /// Distance between neighbouring hex centres: `edge * sqrt(3)`.
 const HEX_SPACING_M: f64 = HEX_EDGE_M * 1.732_050_8;
+
+/// H3 hexes vary in size across the globe, and `HEX_EDGE_M` is the average.
+/// Ring counts are sized against a hex this much smaller than average, so the
+/// disk still reaches the circle's edge where cells are small. The cover is
+/// trimmed to hexes that actually touch the circle afterwards, so the
+/// overshoot costs a little CPU and nothing in Redis or upstream.
+const SMALLEST_HEX_RATIO: f64 = 0.7;
 
 /// Pubs open and close rarely, so a month of staleness buys a lot of saved
 /// upstream calls.
@@ -275,17 +282,25 @@ async fn populate(
         places::get_elements_in_radius(config, user_lat, user_lon, query_radius, None, mode)
             .await?;
 
-    // A full response may be truncated, so it can't be trusted to be the
-    // whole story for any hex. Only rebuild sets from a complete response;
-    // otherwise merge and leave departed places in place.
-    let complete = elements.len() < places::RESULT_LIMIT;
+    // Only hexes lying entirely inside the region this response is known to
+    // be complete for can be credited. Anything else (cut off by the query
+    // cap, or past the point a truncated response stopped) would otherwise be
+    // marked fresh for a month while missing places.
+    let complete_within = complete_within_m(
+        user_lat,
+        user_lon,
+        query_radius,
+        &elements,
+        places::RESULT_LIMIT,
+    );
+    let credited = creditable_hexes(user_lat, user_lon, missing, complete_within);
 
     let mut pipe = redis::pipe();
     pipe.atomic();
-    if complete {
-        for hex in missing {
-            pipe.cmd("DEL").arg(hex_key(mode, *hex)).ignore();
-        }
+    // A credited hex's set is rebuilt from scratch, which is what drops
+    // places that have disappeared upstream. Uncredited hexes only merge.
+    for hex in &credited {
+        pipe.cmd("DEL").arg(hex_key(mode, *hex)).ignore();
     }
 
     let mut stored = 0usize;
@@ -317,9 +332,10 @@ async fn populate(
         stored += 1;
     }
 
-    // Credit every missing hex, including the empty ones. Caching the absence
-    // of places is what stops cold rural hexes being re-fetched forever.
-    for hex in missing {
+    // Credit the fully-covered hexes, including empty ones. Caching the
+    // absence of places is what stops cold rural hexes being re-fetched
+    // forever. Uncredited hexes stay missing and are retried next request.
+    for hex in &credited {
         pipe.cmd("SET")
             .arg(ledger_key(mode, *hex))
             .arg("1")
@@ -336,7 +352,9 @@ async fn populate(
         missing_hexes = missing.len(),
         upstream_returned = elements.len(),
         stored,
-        rebuilt = complete,
+        credited = credited.len(),
+        uncredited = missing.len() - credited.len(),
+        complete_within_m = complete_within,
         mode = %mode,
         "places_cache_populated"
     );
@@ -352,25 +370,81 @@ fn enclosing_query_radius(
 ) -> i16 {
     let mut needed = user_radius as f64;
     for hex in missing {
-        let centre = LatLng::from(*hex);
-        let farthest = haversine_m(user_lat, user_lon, centre.lat(), centre.lng()) + HEX_EDGE_M;
-        needed = needed.max(farthest);
+        needed = needed.max(farthest_point_m(user_lat, user_lon, *hex));
     }
     // Margin so float wobble can't leave us a metre short.
     needed += 50.0;
     (needed.min(MAX_QUERY_RADIUS_M as f64)) as i16
 }
 
-/// Hexes covering the query circle, plus one ring so a circle sitting on a
-/// boundary still picks up its neighbours.
+/// How far from the origin an upstream response is known to be complete.
+///
+/// A short response holds everything inside the query circle. A full one
+/// (`limit` results) may have been cut off, but Geoapify sorts by proximity
+/// to the same point we query around, so it still holds everything nearer
+/// than its farthest result. A metre is shaved off for ties at that distance.
+fn complete_within_m(
+    lat: f64,
+    lon: f64,
+    query_radius: i16,
+    elements: &[Element],
+    limit: usize,
+) -> f64 {
+    let query = query_radius as f64;
+    if elements.len() < limit {
+        return query;
+    }
+    let farthest = elements
+        .iter()
+        .map(|e| haversine_m(lat, lon, e.location.latitude, e.location.longitude))
+        .fold(0.0f64, f64::max);
+    (farthest - 1.0).clamp(0.0, query)
+}
+
+/// The missing hexes that lie entirely within `within_m` of the origin.
+fn creditable_hexes(lat: f64, lon: f64, missing: &[CellIndex], within_m: f64) -> Vec<CellIndex> {
+    missing
+        .iter()
+        .copied()
+        .filter(|h| farthest_point_m(lat, lon, *h) <= within_m)
+        .collect()
+}
+
+/// Distance from a point to the farthest corner of a hex, i.e. the radius a
+/// circle around that point needs to fully contain the hex. Uses the cell's
+/// real boundary rather than the average edge, since hex sizes vary.
+fn farthest_point_m(lat: f64, lon: f64, hex: CellIndex) -> f64 {
+    hex.boundary()
+        .iter()
+        .map(|v| haversine_m(lat, lon, v.lat(), v.lng()))
+        .fold(0.0f64, f64::max)
+}
+
+/// Distance from a point to the nearest part of a hex, lower-bounded by
+/// centre distance minus the cell's own circumradius. Zero inside the hex.
+fn nearest_point_m(lat: f64, lon: f64, hex: CellIndex) -> f64 {
+    let centre = LatLng::from(hex);
+    let circumradius = farthest_point_m(centre.lat(), centre.lng(), hex);
+    (haversine_m(lat, lon, centre.lat(), centre.lng()) - circumradius).max(0.0)
+}
+
+/// Hexes that touch the query circle. A ring disk sized for the smallest
+/// cells is generated, then trimmed to hexes that can overlap the circle, so
+/// nothing is fetched, credited or read that the query can't use.
 fn cover_hexes(
     lat: f64,
     lon: f64,
     radius_m: i16,
 ) -> Result<Vec<CellIndex>, h3o::error::InvalidLatLng> {
     let centre = LatLng::new(lat, lon)?.to_cell(HEX_RES);
-    let steps = ((radius_m as f64 / HEX_SPACING_M).ceil() as u32).saturating_add(1);
-    Ok(centre.grid_disk::<Vec<_>>(steps))
+    let spacing = HEX_SPACING_M * SMALLEST_HEX_RATIO;
+    let steps = ((radius_m as f64 / spacing).ceil() as u32).saturating_add(1);
+    let radius = radius_m as f64;
+    Ok(centre
+        .grid_disk::<Vec<_>>(steps)
+        .into_iter()
+        .filter(|h| nearest_point_m(lat, lon, *h) <= radius)
+        .collect())
 }
 
 fn key_prefix(mode: Mode) -> &'static str {
@@ -450,23 +524,60 @@ mod tests {
         assert!(big.len() > small.len());
     }
 
+    /// Point `d` metres from (lat, lon) on initial bearing `brg` degrees.
+    fn destination(lat: f64, lon: f64, d: f64, brg: f64) -> (f64, f64) {
+        const R: f64 = 6_371_000.0;
+        let (phi1, lam1, theta) = (lat.to_radians(), lon.to_radians(), brg.to_radians());
+        let delta = d / R;
+        let phi2 = (phi1.sin() * delta.cos() + phi1.cos() * delta.sin() * theta.cos()).asin();
+        let lam2 = lam1
+            + (theta.sin() * delta.sin() * phi1.cos()).atan2(delta.cos() - phi1.sin() * phi2.sin());
+        (phi2.to_degrees(), lam2.to_degrees())
+    }
+
+    /// Mix of latitudes, including far south where H3 cells are distorted.
+    const PROBE_ORIGINS: [(f64, f64); 5] = [
+        (55.94, -3.18),
+        (51.51, -0.13),
+        (0.0, 0.0),
+        (-33.87, 151.21),
+        (-45.0, -150.0),
+    ];
+
     #[test]
     fn cover_hexes_reaches_every_point_in_the_circle() {
-        // Under-covering silently drops places, so check the cover extends
-        // past the circle in the worst direction.
-        for radius in [100i16, 500, 1500, 5000, MAX_QUERY_RADIUS_M] {
-            let cover = cover_hexes(55.94, -3.18, radius).expect("cover");
-            let reach = cover
-                .iter()
-                .map(|h| {
-                    let c = LatLng::from(*h);
-                    haversine_m(55.94, -3.18, c.lat(), c.lng())
-                })
-                .fold(0.0f64, f64::max);
-            assert!(
-                reach + HEX_EDGE_M >= radius as f64,
-                "radius {radius} reaches only {reach}m"
-            );
+        // Under-covering silently drops places. Walk the circle's edge (and
+        // just inside it) and require every point's hex to be in the cover.
+        for (lat, lon) in PROBE_ORIGINS {
+            for radius in [100i16, 500, 1500, 5000, MAX_QUERY_RADIUS_M] {
+                let cover: HashSet<CellIndex> = cover_hexes(lat, lon, radius)
+                    .expect("cover")
+                    .into_iter()
+                    .collect();
+                for step in 0..360 {
+                    for d in [radius as f64 * 0.999, radius as f64 * 0.5] {
+                        let (plat, plon) = destination(lat, lon, d, step as f64);
+                        let cell = LatLng::new(plat, plon).unwrap().to_cell(HEX_RES);
+                        assert!(
+                            cover.contains(&cell),
+                            "({lat},{lon}) r={radius}: point at {d:.0}m bearing {step} not covered"
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn cover_hexes_only_keeps_hexes_touching_the_circle() {
+        // The trimmed cover is what keeps upstream queries small enough to
+        // stay under the result cap. Untrimmed, a 500 m search was 37 hexes.
+        for (lat, lon) in PROBE_ORIGINS {
+            let cover = cover_hexes(lat, lon, 500).expect("cover");
+            assert!(cover.len() <= 12, "500 m cover is {} hexes", cover.len());
+            for h in &cover {
+                assert!(nearest_point_m(lat, lon, *h) <= 500.0);
+            }
         }
     }
 
@@ -478,12 +589,87 @@ mod tests {
     }
 
     #[test]
+    fn product_radii_never_hit_the_query_cap() {
+        // If a fully-missing cover needs more than MAX_QUERY_RADIUS_M, the
+        // outer hexes can never be credited and every request re-fetches.
+        // 5 km is the largest radius the product sends.
+        for (lat, lon) in PROBE_ORIGINS {
+            let cover = cover_hexes(lat, lon, 5000).expect("cover");
+            let needed = cover
+                .iter()
+                .map(|h| farthest_point_m(lat, lon, *h))
+                .fold(0.0f64, f64::max);
+            assert!(
+                needed + 50.0 < MAX_QUERY_RADIUS_M as f64,
+                "({lat},{lon}) needs {needed:.0}m"
+            );
+        }
+    }
+
+    fn element_at(lat: f64, lon: f64) -> Element {
+        CachedPlace {
+            place_id: format!("{lat},{lon}"),
+            name: "p".to_string(),
+            latitude: lat,
+            longitude: lon,
+            address_line1: None,
+            address_line2: None,
+            phone: None,
+            website: None,
+            opening_hours: None,
+            wikidata_id: None,
+            outdoor_seating: false,
+        }
+        .into_element(lat, lon)
+    }
+
+    #[test]
+    fn short_response_is_complete_for_the_whole_query() {
+        let els = vec![element_at(55.941, -3.18)];
+        assert_eq!(complete_within_m(55.94, -3.18, 1500, &els, 200), 1500.0);
+        assert_eq!(complete_within_m(55.94, -3.18, 1500, &[], 200), 1500.0);
+    }
+
+    #[test]
+    fn full_response_is_only_complete_up_to_its_farthest_result() {
+        let (lat, lon) = (55.94, -3.18);
+        let near = destination(lat, lon, 300.0, 0.0);
+        let far = destination(lat, lon, 800.0, 90.0);
+        let els = vec![element_at(near.0, near.1), element_at(far.0, far.1)];
+        let within = complete_within_m(lat, lon, 1500, &els, 2);
+        assert!((within - 799.0).abs() < 1.0, "got {within}");
+    }
+
+    #[test]
+    fn full_response_never_exceeds_the_query_radius() {
+        let (lat, lon) = (55.94, -3.18);
+        let far = destination(lat, lon, 2000.0, 0.0);
+        let els = vec![element_at(far.0, far.1)];
+        assert_eq!(complete_within_m(lat, lon, 1500, &els, 1), 1500.0);
+    }
+
+    #[test]
+    fn only_fully_enclosed_hexes_are_credited() {
+        let (lat, lon) = (55.94, -3.18);
+        let cover = cover_hexes(lat, lon, 1500).expect("cover");
+        let home = LatLng::new(lat, lon).unwrap().to_cell(HEX_RES);
+        // Complete out to 1 km: the home hex qualifies, the outer ring of a
+        // 1.5 km cover does not.
+        let credited = creditable_hexes(lat, lon, &cover, 1000.0);
+        assert!(credited.contains(&home));
+        assert!(credited.len() < cover.len());
+        for h in &credited {
+            assert!(farthest_point_m(lat, lon, *h) <= 1000.0);
+        }
+        // Nothing qualifies if the response is complete for no distance.
+        assert!(creditable_hexes(lat, lon, &cover, 0.0).is_empty());
+    }
+
+    #[test]
     fn enclosing_query_radius_covers_all_missing() {
         let far = LatLng::new(55.96, -3.18).unwrap().to_cell(HEX_RES);
         let grown = enclosing_query_radius(55.94, -3.18, 500, std::slice::from_ref(&far));
-        let centre = LatLng::from(far);
-        let d = haversine_m(55.94, -3.18, centre.lat(), centre.lng());
-        assert!((grown as f64) >= d + HEX_EDGE_M);
+        assert!((grown as f64) >= farthest_point_m(55.94, -3.18, far));
     }
 
     #[test]

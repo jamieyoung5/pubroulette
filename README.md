@@ -58,13 +58,13 @@ make fmt-check   # formatting
 make ci          # everything CI runs
 ```
 
-221 tests run with no external services. Suites that need a live Redis or a real Geoapify key are marked
+227 tests run with no external services. Suites that need a live Redis or a real Geoapify key are marked
 `#[ignore]`:
 
 ```sh
 make redis-up
-REDIS_URL=redis://localhost:6379 cargo test -- --ignored   # 55 Redis-backed tests
-make test-smoke                                            # hits the real Geoapify API
+REDIS_URL=redis://localhost:6379 make test-redis   # 56 Redis-backed tests (also run in CI)
+make test-smoke                                    # hits the real Geoapify API
 ```
 
 Set `PLACES_CACHE_DISABLED=1` to bypass the cache and go straight upstream.

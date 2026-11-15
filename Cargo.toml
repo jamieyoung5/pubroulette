@@ -90,3 +90,10 @@ axum = "0.8.6"
 tower-http = { version = "0.5.2", features = ["cors"] }
 dotenvy = "0.15"
 wiremock = "0.6"
+
+# Each [[bin]] ships as its own statically linked function, so keep them small.
+[profile.release]
+strip = true
+lto = true
+codegen-units = 1
+opt-level = "s"
