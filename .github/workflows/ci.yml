@@ -40,6 +40,27 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - run: make test
 
+  test-redis:
+    name: Test (Redis)
+    runs-on: ubuntu-latest
+    services:
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 2s
+          --health-timeout 2s
+          --health-retries 10
+    env:
+      REDIS_URL: redis://localhost:6379
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: make test-redis
+
   build:
     name: Build
     runs-on: ubuntu-latest

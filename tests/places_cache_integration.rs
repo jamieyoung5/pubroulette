@@ -1063,3 +1063,83 @@ async fn cached_data_carries_a_ttl() {
 
     cleanup(&mut conn, lat, lon, radius).await;
 }
+
+#[tokio::test]
+#[ignore]
+async fn truncated_response_only_credits_hexes_it_fully_covers() {
+    // A full RESULT_LIMIT response may have been cut off, so only hexes nearer
+    // than its farthest result can be trusted. Crediting the rest would mark
+    // them fresh for a month while they were missing places.
+    let (lat, lon) = test_origin();
+    let (lat, lon) = _test_cell_centre(lat, lon);
+    let radius: i16 = 1500;
+    let mut conn = test_connect().await;
+    cleanup(&mut conn, lat, lon, radius).await;
+
+    let (server, config) = setup_mock().await;
+
+    // RESULT_LIMIT places, the farthest 1 km out: complete to ~1 km only.
+    let n = pubroulette::places::RESULT_LIMIT;
+    let tag: u32 = rand::thread_rng().r#gen();
+    let features: Vec<_> = (0..n)
+        .map(|i| {
+            let d = if i == n - 1 {
+                1000.0
+            } else {
+                50.0 + (i as f64) * 2.0
+            };
+            let (plat, plon) = offset_north(lat, lon, d);
+            feature(
+                &format!("Pub {i}"),
+                &format!("pid_trunc_{tag}_{i}"),
+                plon,
+                plat,
+            )
+        })
+        .collect();
+    Mock::given(method("GET"))
+        .and(query_param("apiKey", TEST_API_KEY))
+        .respond_with(ResponseTemplate::new(200).set_body_json(feature_collection(features)))
+        // The outer hexes stay uncredited, so the second query must go
+        // upstream again rather than trusting a partial picture.
+        .expect(2)
+        .mount(&server)
+        .await;
+
+    for _ in 0..2 {
+        let result = get_places_in_radius_with_conn(
+            &config,
+            lat,
+            lon,
+            radius,
+            None,
+            Mode::Pubs,
+            Some(conn.clone()),
+        )
+        .await
+        .expect("fetch should succeed");
+        assert_eq!(result.len(), n, "every returned place is still served");
+    }
+
+    // At a cell centre, a 1 m query covers just the home hex, which sits
+    // well inside 1 km and must be credited.
+    let (home_ledger, _) = _test_keys_for(lat, lon, 1, Mode::Pubs);
+    assert_eq!(home_ledger.len(), 1);
+    let home_set: bool = conn.exists(&home_ledger[0]).await.unwrap();
+    assert!(home_set, "home hex is fully inside the complete region");
+
+    let (ledger_keys, _) = _test_keys_for(lat, lon, radius, Mode::Pubs);
+    let mut uncredited = 0;
+    for k in &ledger_keys {
+        let exists: bool = conn.exists(k).await.unwrap();
+        if !exists {
+            uncredited += 1;
+        }
+    }
+    assert!(
+        uncredited > 0,
+        "hexes beyond the truncated response must not be credited"
+    );
+
+    cleanup(&mut conn, lat, lon, radius).await;
+}

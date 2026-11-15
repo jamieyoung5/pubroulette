@@ -1,4 +1,4 @@
-.PHONY: all check build test test-smoke lint fmt ci dev play crawl play-coffee crawl-bearing clean help
+.PHONY: all check build test test-redis test-smoke lint fmt ci dev play crawl play-coffee crawl-bearing clean help
 
 # --- Config ---
 
@@ -41,6 +41,9 @@ test-unit: ## Run unit tests only
 
 test-integration: ## Run integration tests only
 	$(CARGO) test --test integration
+
+test-redis: ## Run the Redis-gated integration tests (requires REDIS_URL; see redis-up)
+	$(CARGO) test --test rooms_integration --test rate_limit_integration --test places_cache_integration -- --ignored
 
 test-smoke: ## Run smoke tests against real Geoapify (requires .env)
 	$(CARGO) test --test smoke -- --ignored
